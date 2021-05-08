@@ -9,6 +9,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def leer_grafo_archivo(nombreArchivo):
+    archivo = open(nombreArchivo)
+    grafo = ([],[])
+    cantVert = int(archivo.readline().rstrip("\n"))
+    lineasRestantes = archivo.readlines()
+    # agrego los vertices a la primer lista de tupla
+    for i in range(cantVert):
+        grafo[0].append(lineasRestantes[i].rstrip("\n"))
+    
+    cantLineas = len(lineasRestantes)
+    for i in range(cantVert, cantLineas):
+        grafo[1].append(tuple(lineasRestantes[i].rstrip("\n").split()))
+    return grafo
+
 class LayoutGraph:
 
     def __init__(self, grafo, iters, refresh, c1, c2, verbose=False):
