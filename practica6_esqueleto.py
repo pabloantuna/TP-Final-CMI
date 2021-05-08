@@ -60,6 +60,11 @@ class LayoutGraph:
         self.k_atraccion = c2 * np.sqrt(self.ancho**2 / len(self.grafo[0]))
         self.k_repulsion = c1 * np.sqrt(self.ancho**2 / len(self.grafo[0]))
 
+    #Si verbose está activado, se van imprimiendo los mensajes
+    def mostrar_mensaje(self, mensaje):
+    	if self.verbose:
+    		print(mensaje)
+
     def randomize_positions(self):
         for vertice in self.grafo[0]:
             self.posicion_X[vertice] = np.random.uniform(0,self.ancho)
@@ -142,7 +147,7 @@ class LayoutGraph:
         """
         self.randomize_positions()
         for i in range(1, self.iters):
-            print(i)
+            self.mostrar_mensaje("Iteracion nro " + str(i))
             self.step()
             self.dibujar_grafo()
         plt.ioff()
