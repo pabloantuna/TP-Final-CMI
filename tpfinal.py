@@ -1,8 +1,16 @@
 #! /usr/bin/python
 
-# 6ta Practica Laboratorio 
+# Laboratorio - Trabajo Practico Final
 # Complementos Matematicos I
-# Ejemplo parseo argumentos
+
+# Integrantes:
+# Pablo Antuña
+# Alesandro Regolo
+
+# python3 tpfinal.py archivo_grafo [options]
+# opciones:
+# [-h] [-v] [--iters ITERS] [--refresh REFRESH] [--temp TEMP] [--c1 C1] [--c2 C2]
+# [--ctemp CTEMP] [--grav GRAV] [--ancho ANCHO] 
 
 import argparse
 import matplotlib.pyplot as plt
@@ -34,6 +42,9 @@ class LayoutGraph:
         refresh: cada cuántas iteraciones graficar. Si su valor es cero, entonces debe graficarse solo al final.
         c1: constante de repulsión
         c2: constante de atracción
+        ctemp: constante por la cual se multiplica a la temp
+        ancho: ancho del layout (se asume layout cuadrado)
+        grav: constante de gravedad
         verbose: si está encendido, activa los comentarios
         """
 
@@ -46,7 +57,7 @@ class LayoutGraph:
         self.accum_X = {}
         self.accum_Y = {}
         self.ancho = ancho
-        self.epsilon = 0.5
+        self.epsilon = 1
         self.ctemp = ctemp
 
         # Guardo opciones
@@ -56,6 +67,7 @@ class LayoutGraph:
         self.temp = temp
         self.c1 = c1
         self.c2 = c2
+        self.grav = grav
         # las constantes k las guardamos para no calcularlas cada vez que se la necesite
         # consideramos el layout cuadrado (de forma que el area es ancho*ancho)
         self.k_atraccion = c2 * np.sqrt(self.ancho**2 / len(self.grafo[0]))
@@ -67,27 +79,32 @@ class LayoutGraph:
     		print(mensaje)
 
     def randomize_positions(self):
+        self.mostrar_mensaje("Inicio inicializacion posiciones")
         for vertice in self.grafo[0]:
             self.posicion_X[vertice] = np.random.uniform(0,self.ancho)
             self.posicion_Y[vertice] = np.random.uniform(0,self.ancho)
+        self.mostrar_mensaje("Fin inicializacion posiciones")
 
     def distancia(self, v0, v1):
         return np.sqrt((self.posicion_X[v0] - self.posicion_X[v1])**2 + (self.posicion_Y[v0] - self.posicion_Y[v1])**2)
 
     def initialize_accumulators(self):
+        self.mostrar_mensaje("Inicio inicializacion de acumuladores de fuerza")
         for vertice in self.grafo[0]:
             self.accum_X[vertice] = 0
             self.accum_Y[vertice] = 0
+        self.mostrar_mensaje("Fin inicializacion de acumuladores de fuerza")
 
     def f_attraction(self, d):
         return d**2 / self.k_atraccion
 
     def f_repulsion(self, d):
-        return self.k_atraccion**2 / d
+        return self.k_repulsion**2 / d
 
     def division_por_cero(self, distancia, v0, v1):
         while (distancia < self.epsilon):
-            fuerzaRand = np.random.uniform(0.0,1.0)
+            self.mostrar_mensaje("Distancia entre vertices menor a la minima. Aplicando fuerzas aleatorias")
+            fuerzaRand = np.random.random()
             self.posicion_X[v0] += fuerzaRand
             self.posicion_Y[v0] += fuerzaRand
             self.posicion_X[v1] -= fuerzaRand
@@ -96,6 +113,7 @@ class LayoutGraph:
         return distancia
 
     def compute_attraction_forces(self):
+        self.mostrar_mensaje("Inicio calculo fuerza de atraccion")
         for v0,v1 in self.grafo[1]:
             distancia = self.distancia(v0,v1)
 
@@ -106,11 +124,13 @@ class LayoutGraph:
             fx = (mod_fa * (self.posicion_X[v1] - self.posicion_X[v0])) / distancia
             fy = (mod_fa * (self.posicion_Y[v1] - self.posicion_Y[v0])) / distancia
             self.accum_X[v0] += fx
-            self.accum_X[v0] += fy
-            self.accum_Y[v1] -= fx
+            self.accum_Y[v0] += fy
+            self.accum_X[v1] -= fx
             self.accum_Y[v1] -= fy
+        self.mostrar_mensaje("Fin calculo fuerza de atraccion")
 
     def compute_repulsion_forces(self):
+        self.mostrar_mensaje("Inicio calculo fuerza de repulsion")
         for v0 in self.grafo[0]:
             for v1 in self.grafo[0]:
                 if v0 != v1:
@@ -126,6 +146,7 @@ class LayoutGraph:
                     self.accum_Y[v0] -= fy
                     self.accum_X[v1] += fx
                     self.accum_Y[v1] += fy
+        self.mostrar_mensaje("Fin calculo fuerza de repulsion")
 
     def update_positions(self):
         self.mostrar_mensaje("Inicio actualizacion posiciones")
@@ -160,9 +181,23 @@ class LayoutGraph:
         self.mostrar_mensaje("Fin actualizacion temperatura")
 
     def compute_gravity_forces(self):
-        #self.mostrar_mensaje("Inicio calculo gravedad")
-        #self.mostrar_mensaje("Fin calculo gravedad")
-        pass
+        self.mostrar_mensaje("Inicio calculo gravedad")
+        centro = self.ancho / 2
+        for v in self.grafo[0]:
+            # calculo la distancia al centro
+            distancia = np.sqrt((self.posicion_X[v] - centro)**2 + (self.posicion_Y[v] - centro)**2)
+
+            # division por cero
+            while (distancia < self.epsilon):
+                fuerzaRand = np.random.random()
+                self.posicion_X[v] += fuerzaRand
+                self.posicion_Y[v] += fuerzaRand
+                distancia = np.sqrt((self.posicion_X[v] - centro)**2 + (self.posicion_Y[v] - centro)**2)
+
+            self.accum_X[v] -= (self.grav * (self.posicion_X[v] - centro)) / distancia
+            self.accum_Y[v] -= (self.grav * (self.posicion_Y[v] - centro)) / distancia
+
+        self.mostrar_mensaje("Fin calculo gravedad")
 
     def step(self):
         self.initialize_accumulators()
@@ -177,9 +212,9 @@ class LayoutGraph:
         x = [self.posicion_X[v] for v in self.grafo[0]]
         y = [self.posicion_Y[v] for v in self.grafo[0]]
         plt.clf()
-        # ejes = plt.gca()
-        # ejes.set_xlim([0, self.ancho])
-        # ejes.set_ylim([0, self.ancho])
+        ejes = plt.gca()
+        ejes.set_xlim([0, self.ancho])
+        ejes.set_ylim([0, self.ancho])
         plt.scatter(x, y)
         for v0, v1 in self.grafo[1]:
             plt.plot((self.posicion_X[v0], self.posicion_X[v1]), 
@@ -195,8 +230,12 @@ class LayoutGraph:
         for i in range(1, self.iters):
             self.mostrar_mensaje("Iteracion nro " + str(i))
             self.step()
-            self.dibujar_grafo()
+            if self.refresh != 0 and (i % self.refresh == 0):
+                self.mostrar_mensaje("Se dibuja el grafo en iteracion " + str(i))
+                self.dibujar_grafo()
         plt.ioff()
+        self.mostrar_mensaje("Fin programa")
+        self.dibujar_grafo()
         plt.show()
     
 
@@ -229,7 +268,7 @@ def main():
         '--refresh',
         type=int,
         help='Cada cuantas iteraciones graficar',
-        default=0
+        default=1
     )
     # Archivo del cual leer el grafo
     parser.add_argument(
@@ -275,13 +314,6 @@ def main():
     )
 
     args = parser.parse_args()
-
-    # Descomentar abajo para ver funcionamiento de argparse
-    # print(args.verbose)
-    # print(args.iters)    
-    # print(args.file_name)
-    # print(args.temp)
-    # return
 
     # Creamos nuestro objeto LayoutGraph
     layout_gr = LayoutGraph(
