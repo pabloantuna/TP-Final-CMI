@@ -7,6 +7,7 @@
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.testing._private.utils import tempdir
 
 
 def leer_grafo_archivo(nombreArchivo):
@@ -25,7 +26,7 @@ def leer_grafo_archivo(nombreArchivo):
 
 class LayoutGraph:
 
-    def __init__(self, grafo, temp, iters, refresh, c1, c2, verbose=False):
+    def __init__(self, grafo, temp, iters, refresh, c1, c2, ctemp, ancho, grav, verbose=False):
         """
         Parámetros:
         grafo: grafo en formato lista
@@ -44,9 +45,9 @@ class LayoutGraph:
         self.posicion_Y = {}
         self.accum_X = {}
         self.accum_Y = {}
-        self.ancho = 1000
+        self.ancho = ancho
         self.epsilon = 0.5
-        self.ctemp = 0.95
+        self.ctemp = ctemp
 
         # Guardo opciones
         self.iters = iters
@@ -84,9 +85,23 @@ class LayoutGraph:
     def f_repulsion(self, d):
         return self.k_atraccion**2 / d
 
+    def division_por_cero(self, distancia, v0, v1):
+        while (distancia < self.epsilon):
+            fuerzaRand = np.random.uniform(0.0,1.0)
+            self.posicion_X[v0] += fuerzaRand
+            self.posicion_Y[v0] += fuerzaRand
+            self.posicion_X[v1] -= fuerzaRand
+            self.posicion_Y[v1] -= fuerzaRand
+            distancia = self.distancia(v0, v1)
+        return distancia
+
     def compute_attraction_forces(self):
         for v0,v1 in self.grafo[1]:
             distancia = self.distancia(v0,v1)
+
+            #caso division por cero
+            distancia = self.division_por_cero(distancia, v0, v1)
+            
             mod_fa = self.f_attraction(distancia)
             fx = (mod_fa * (self.posicion_X[v1] - self.posicion_X[v0])) / distancia
             fy = (mod_fa * (self.posicion_Y[v1] - self.posicion_Y[v0])) / distancia
@@ -100,6 +115,10 @@ class LayoutGraph:
             for v1 in self.grafo[0]:
                 if v0 != v1:
                     distancia = self.distancia(v0,v1)
+
+                    #caso division por cero
+                    distancia = self.division_por_cero(distancia, v0, v1)
+
                     mod_fr = self.f_repulsion(distancia)
                     fx = (mod_fr * (self.posicion_X[v1] - self.posicion_X[v0])) / distancia
                     fy = (mod_fr * (self.posicion_Y[v1] - self.posicion_Y[v0])) / distancia
@@ -109,14 +128,40 @@ class LayoutGraph:
                     self.accum_Y[v1] += fy
 
     def update_positions(self):
+        self.mostrar_mensaje("Inicio actualizacion posiciones")
         for v in self.grafo[0]:
+            moduloFuerza = np.sqrt(self.accum_X[v]**2 + self.accum_Y[v]**2)
+            if moduloFuerza > self.temp:
+                self.accum_X[v] = (self.accum_X[v] / moduloFuerza) * self.temp
+                self.accum_Y[v] = (self.accum_Y[v] / moduloFuerza) * self.temp
+            
             self.posicion_X[v] += self.accum_X[v] 
             self.posicion_Y[v] += self.accum_Y[v]
 
+            if self.posicion_X[v] < 0:
+                self.mostrar_mensaje("Posición fuera del borde del layout. Cambiando posicion")
+                self.posicion_X[v] = 0
+            elif self.posicion_X[v] > self.ancho:
+                self.mostrar_mensaje("Posición fuera del borde del layout. Cambiando posicion")
+                self.posicion_X[v] = self.ancho
+            
+            if self.posicion_Y[v] < 0:
+                self.mostrar_mensaje("Posición fuera del borde del layout. Cambiando posicion")
+                self.posicion_Y[v] = 0
+            elif self.posicion_Y[v] > self.ancho:
+                self.mostrar_mensaje("Posición fuera del borde del layout. Cambiando posicion")
+                self.posicion_Y[v] = self.ancho
+        
+        self.mostrar_mensaje("Fin actualizacion posiciones")
+
     def update_temperature(self):
+        self.mostrar_mensaje("Inicio actualizacion temperatura")
         self.temp *= self.ctemp
+        self.mostrar_mensaje("Fin actualizacion temperatura")
 
     def compute_gravity_forces(self):
+        #self.mostrar_mensaje("Inicio calculo gravedad")
+        #self.mostrar_mensaje("Fin calculo gravedad")
         pass
 
     def step(self):
@@ -146,6 +191,7 @@ class LayoutGraph:
         un layout
         """
         self.randomize_positions()
+        plt.ion()
         for i in range(1, self.iters):
             self.mostrar_mensaje("Iteracion nro " + str(i))
             self.step()
@@ -191,6 +237,43 @@ def main():
         help='Archivo del cual leer el grafo a dibujar'
     )
 
+    parser.add_argument(
+        '--c1',
+        type=float,
+        help='Constante de repulsión',
+        default=0.1
+    )
+
+    parser.add_argument(
+        '--c2',
+        type=float,
+        help='Constante de atracción',
+        default=5.0
+    )
+
+    # Constante para disminuir temp
+    parser.add_argument(
+        '--ctemp',
+        type = float,
+        help = 'Constante para multiplicar por la temperatura',
+        default = 0.95
+    )
+
+    #Ancho layout
+    parser.add_argument(
+        '--ancho',
+        type=int,
+        help='Ancho del layout',
+        default=1000
+    )
+
+    parser.add_argument(
+        '--grav',
+        type=float,
+        help='Constante de gravedad',
+        default=0.05
+    )
+
     args = parser.parse_args()
 
     # Descomentar abajo para ver funcionamiento de argparse
@@ -205,9 +288,12 @@ def main():
         leer_grafo_archivo(args.file_name),
         temp =args.temp,
         iters=args.iters,
-        refresh=1,
-        c1=0.1,
-        c2=5.0,
+        refresh=args.refresh,
+        c1=args.c1,
+        c2=args.c2,
+        ctemp=args.ctemp,
+        ancho=args.ancho,
+        grav=args.grav,
         verbose=args.verbose
     )
 
